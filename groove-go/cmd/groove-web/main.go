@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/safecast/groove-go/internal/node"
@@ -15,27 +16,55 @@ import (
 	"github.com/safecast/groove-go/internal/workspace"
 )
 
+// multiFlag lets a flag be specified multiple times: --relay addr1 --relay addr2
+type multiFlag []string
+
+func (m *multiFlag) String() string  { return strings.Join(*m, ", ") }
+func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
+
 func main() {
 	port      := flag.Int("port", 0, "libp2p TCP listen port (0 = random)")
 	httpAddr  := flag.String("http", ":8080", "Web UI listen address")
 	defaultCh := flag.String("workspace", "general", "Default channel to join on startup")
 	dataDir   := flag.String("data", defaultDataDir(), "Base directory for local stores")
+	enableDHT := flag.Bool("dht", true, "Enable Kademlia DHT for WAN peer discovery")
+
+	var relayAddrs  multiFlag
+	var bootstrapAddrs multiFlag
+	flag.Var(&relayAddrs, "relay",
+		"Static relay address (repeat for multiple):\n"+
+			"  e.g. /ip4/1.2.3.4/tcp/4001/p2p/<peerID>")
+	flag.Var(&bootstrapAddrs, "bootstrap",
+		"DHT bootstrap peer (repeat for multiple; defaults to IPFS bootstrap nodes)")
 	flag.Parse()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	n, err := node.New(ctx, *port)
+	// Boot libp2p node with NAT traversal
+	n, err := node.New(ctx, node.Config{
+		ListenPort:   *port,
+		StaticRelays: []string(relayAddrs),
+	})
 	if err != nil {
 		fatal(err)
 	}
 	defer n.Close()
 
+	// mDNS for LAN discovery
 	mdnsSvc, err := node.StartMDNS(ctx, n.Host)
 	if err != nil {
 		fatal(err)
 	}
 	defer mdnsSvc.Close()
+
+	// Kademlia DHT for WAN discovery
+	if *enableDHT {
+		if _, err := node.StartDHT(ctx, n.Host, []string(bootstrapAddrs)); err != nil {
+			fmt.Fprintf(os.Stderr, "[dht] warning: %s\n", err)
+			// non-fatal — LAN still works via mDNS
+		}
+	}
 
 	ps, err := transport.NewGossipSub(ctx, n.Host)
 	if err != nil {

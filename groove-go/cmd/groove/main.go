@@ -46,7 +46,7 @@ func main() {
 	}
 
 	// Boot libp2p node
-	n, err := node.New(ctx, *port)
+	n, err := node.New(ctx, node.Config{ListenPort: *port})
 	if err != nil {
 		fatal(err)
 	}
