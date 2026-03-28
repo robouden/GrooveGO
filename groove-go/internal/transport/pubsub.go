@@ -88,12 +88,21 @@ func (w *Workspace) Publish(ctx context.Context, body string) error {
 // ReadLoop blocks and prints every incoming message, persisting each one.
 // Returns when ctx is cancelled.
 func (w *Workspace) ReadLoop(ctx context.Context) {
+	w.ReadLoopInto(ctx, func(msg Message) {
+		fmt.Printf("[%s] %s: %s\n", msg.Workspace, shortID(msg.From), msg.Body)
+	})
+}
+
+// ReadLoopInto blocks and calls fn for every incoming message from other peers.
+// Messages are also persisted to the store if one is set.
+// Returns when ctx is cancelled.
+func (w *Workspace) ReadLoopInto(ctx context.Context, fn func(Message)) {
 	for {
 		m, err := w.sub.Next(ctx)
 		if err != nil {
 			return
 		}
-		// Skip our own messages — already echoed and saved on Publish.
+		// Skip our own messages.
 		if m.ReceivedFrom == w.self {
 			continue
 		}
@@ -101,10 +110,10 @@ func (w *Workspace) ReadLoop(ctx context.Context) {
 		if err := json.Unmarshal(m.Data, &msg); err != nil {
 			continue
 		}
-		fmt.Printf("[%s] %s: %s\n", msg.Workspace, shortID(msg.From), msg.Body)
 		if w.store != nil {
 			_ = w.store.Save(store.Message(msg))
 		}
+		fn(msg)
 	}
 }
 
