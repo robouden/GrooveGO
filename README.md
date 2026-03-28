@@ -16,49 +16,138 @@ GrooveGO brings back the best of Groove's architecture on modern P2P primitives:
 | Phase | Status | Feature |
 |-------|--------|---------|
 | 1 | ✅ Done | libp2p node bootstrap + mDNS LAN discovery |
-| 2 | 🔜 Next | GossipSub pubsub — text messaging within workspace topics |
-| 3 | ⬜ | Persistence — Badger/SQLite local store, replay on reconnect |
-| 4 | ⬜ | CRDT documents — conflict-free shared state (Automerge) |
-| 5 | ⬜ | Workspace manager — membership, signed invitations |
-| 6 | ⬜ | Presence — heartbeats, online/offline status |
-| 7 | ⬜ | NAT traversal — AutoRelay + hole punching for WAN peers |
+| 2 | ✅ Done | GossipSub pubsub — text messaging within workspace topics |
+| 3 | ✅ Done | Persistence — Badger local store, replay on reconnect |
+| 4 | ✅ Done | Browser web UI + WebSocket bridge + file sharing |
+| 5 | ✅ Done | Multi-channel workspace manager + channel sidebar |
+| 6 | ✅ Done | Presence — heartbeats, online/offline status |
+| 7 | ✅ Done | NAT traversal — AutoRelay + hole punching + relay node |
 
 ## Project Structure
 
 ```
 groove-go/
-├── cmd/groove/main.go        # Entry point (--port flag, graceful shutdown)
+├── cmd/
+│   ├── groove/           # Headless CLI node
+│   ├── groove-ui/        # Bubble Tea terminal UI
+│   ├── groove-web/       # Browser UI + WebSocket server
+│   └── groove-relay/     # VPS relay/bootstrap node
 ├── internal/
-│   ├── node/                 # libp2p host, Ed25519 identity, mDNS
-│   ├── workspace/            # Workspace CRUD, membership (Phase 5)
-│   ├── sync/                 # CRDT engine, vector clocks (Phase 4)
-│   ├── store/                # Local persistence (Phase 3)
-│   ├── transport/            # GossipSub, direct messaging (Phase 2)
-│   └── presence/             # Online/offline tracking (Phase 6)
-└── pkg/protocol/             # Protobuf message definitions
+│   ├── node/             # libp2p host, Ed25519 identity, mDNS, DHT
+│   ├── workspace/        # Multi-channel workspace manager
+│   ├── store/            # Badger persistence + file storage
+│   ├── transport/        # GossipSub pubsub, file sharing
+│   ├── presence/         # Heartbeat tracker, online/offline status
+│   └── web/              # HTTP server, WebSocket bridge, embedded UI
+└── Makefile              # Cross-platform build targets
 ```
 
 ## Getting Started
+
+### Option A — Pre-built binaries (no Go required)
+
+Download the appropriate binary for your OS from the [Releases](https://github.com/robouden/GrooveGO/releases) page, or build all platforms at once:
+
+```bash
+git clone https://github.com/robouden/GrooveGO.git
+cd GrooveGO/groove-go
+make all          # builds linux/mac/windows into dist/
+```
+
+### Option B — Run from source
 
 **Requirements:** Go 1.22+
 
 ```bash
 git clone https://github.com/robouden/GrooveGO.git
 cd GrooveGO/groove-go
-go mod download
+go run ./cmd/groove-web --workspace general
 ```
 
-**Run two nodes on the same LAN** — they will discover each other automatically via mDNS:
+---
+
+## Deployment
+
+### 1. Run a relay node on a VPS
+
+The relay helps clients behind NAT find and connect to each other across the internet.
 
 ```bash
-# Terminal 1
-go run ./cmd/groove --port 9000
+# Copy binary to VPS (or build from source)
+scp dist/groove-relay-linux-amd64 user@YOUR_VPS_IP:~/groove-relay
+ssh user@YOUR_VPS_IP "chmod +x ~/groove-relay"
 
-# Terminal 2
-go run ./cmd/groove --port 9001
+# Open firewall ports (TCP + UDP for QUIC)
+sudo ufw allow 4001/tcp
+sudo ufw allow 4001/udp
+
+# Start the relay
+./groove-relay --port 4001
 ```
 
-Each node prints its peer ID and listen address on startup. Once discovered, peers connect automatically.
+On startup it prints its full multiaddr — copy it, clients need it:
+
+```
+[relay] node running — share these addresses with your peers:
+  /ip4/1.2.3.4/tcp/4001/p2p/12D3KooWXxxx...
+  /ip4/1.2.3.4/udp/4001/quic-v1/p2p/12D3KooWXxxx...
+```
+
+**Keep it running with systemd:**
+
+```ini
+# /etc/systemd/system/groove-relay.service
+[Unit]
+Description=Groove Relay Node
+
+[Service]
+ExecStart=/home/user/groove-relay --port 4001
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl enable --now groove-relay
+```
+
+### 2. Connect clients via the relay
+
+Give each client the binary for their platform and the relay address:
+
+```bash
+# Linux
+./groove-web-linux-amd64 \
+  --relay /ip4/1.2.3.4/tcp/4001/p2p/12D3KooWXxxx \
+  --workspace general \
+  --http :8080
+
+# Mac
+./groove-web-mac-arm64 \
+  --relay /ip4/1.2.3.4/tcp/4001/p2p/12D3KooWXxxx \
+  --workspace general \
+  --http :8080
+```
+
+Open `http://localhost:8080` in the browser. No Go installation needed on client machines.
+
+| Platform | Binary |
+|----------|--------|
+| Linux x64 | `groove-web-linux-amd64` |
+| Linux ARM64 | `groove-web-linux-arm64` |
+| Mac Intel | `groove-web-mac-amd64` |
+| Mac Apple Silicon | `groove-web-mac-arm64` |
+| Windows | `groove-web-windows-amd64.exe` |
+
+### LAN-only (no relay needed)
+
+On the same local network, peers discover each other automatically via mDNS — no relay or port forwarding required:
+
+```bash
+# Just run on each machine, no --relay flag needed
+./groove-web-linux-amd64 --workspace general --http :8080
+```
 
 ## Architecture
 
