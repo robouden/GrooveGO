@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GrooveGO</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Themes ── */
+    [data-theme="dark"] {
+      --bg:       #0d0f16;
+      --surface:  #161923;
+      --surface2: #1e2130;
+      --border:   #252838;
+      --accent:   #7c6af7;
+      --accent-h: #9d8fff;
+      --text:     #e2e8f0;
+      --muted:    #5a6380;
+      --me:       #a78bfa;
+      --peer:     #38bdf8;
+      --system:   #64748b;
+      --success:  #4ade80;
+      --danger:   #f87171;
+      --shadow:   0 2px 12px rgba(0,0,0,.4);
+    }
+    [data-theme="light"] {
+      --bg:       #f0f2f8;
+      --surface:  #ffffff;
+      --surface2: #f7f8fc;
+      --border:   #dde1ef;
+      --accent:   #6d5ce7;
+      --accent-h: #5848cc;
+      --text:     #1e2130;
+      --muted:    #7c85a2;
+      --me:       #6d5ce7;
+      --peer:     #0284c7;
+      --system:   #94a3b8;
+      --success:  #16a34a;
+      --danger:   #dc2626;
+      --shadow:   0 2px 12px rgba(0,0,0,.1);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      transition: background .25s, color .25s;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      height: 56px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      flex-shrink: 0;
+      gap: 12px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    .logo-icon {
+      width: 30px; height: 30px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .logo-text {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: .02em;
+    }
+    .logo-text span { color: var(--accent); }
+
+    #ws-name {
+      font-size: .85rem;
+      font-weight: 600;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 12px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: auto;
+    }
+
+    #peers-badge {
+      font-size: .75rem;
+      font-weight: 500;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 12px;
+      transition: color .2s;
+    }
+    #peers-badge.has-peers { color: var(--success); border-color: var(--success); }
+
+    #status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+      transition: background .3s;
+      flex-shrink: 0;
+    }
+    #status-dot.connected { background: var(--success); }
+
+    /* Theme toggle button */
+    #theme-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 1rem;
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      transition: color .2s, border-color .2s;
+    }
+    #theme-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* ── Messages ── */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    #messages::-webkit-scrollbar { width: 5px; }
+    #messages::-webkit-scrollbar-track { background: transparent; }
+    #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .msg {
+      display: grid;
+      grid-template-columns: 42px 90px 1fr;
+      align-items: baseline;
+      gap: 0 8px;
+      padding: 4px 8px;
+      border-radius: 8px;
+      transition: background .12s;
+    }
+    .msg:hover { background: var(--surface2); }
+
+    .msg.self   .sender { color: var(--me); }
+    .msg.peer   .sender { color: var(--peer); }
+    .msg.system .sender { color: var(--system); font-style: italic; }
+
+    .timestamp {
+      font-size: .7rem;
+      color: var(--muted);
+      text-align: right;
+      white-space: nowrap;
+    }
+    .sender {
+      font-weight: 600;
+      font-size: .82rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .body {
+      font-size: .9rem;
+      word-break: break-word;
+      line-height: 1.5;
+      color: var(--text);
+    }
+
+    /* ── Divider ── */
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin: 10px 8px;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Empty state ── */
+    #empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      gap: 8px;
+      font-size: .9rem;
+      user-select: none;
+    }
+    #empty .icon { font-size: 2.5rem; opacity: .4; }
+
+    /* ── Input bar ── */
+    footer {
+      padding: 12px 20px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    #input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: .92rem;
+      padding: 10px 16px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    #input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+    }
+    #input::placeholder { color: var(--muted); }
+
+    #send {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 22px;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, transform .1s;
+      white-space: nowrap;
+    }
+    #send:hover:not(:disabled) { background: var(--accent-h); }
+    #send:active:not(:disabled) { transform: scale(.97); }
+    #send:disabled { opacity: .35; cursor: default; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🎵</div>
+    <span class="logo-text">Groove<span>GO</span></span>
+  </div>
+  <div id="ws-name">#general</div>
+  <div class="header-right">
+    <div id="peers-badge">0 peers</div>
+    <div id="status-dot"></div>
+    <button id="theme-btn" title="Toggle light/dark">🌙</button>
+  </div>
+</header>
+
+<div id="messages">
+  <div id="empty">
+    <div class="icon">💬</div>
+    <div>No messages yet — say hello!</div>
+  </div>
+</div>
+
+<footer>
+  <input id="input" type="text" placeholder="Type a message…" autocomplete="off" />
+  <button id="send" disabled>Send</button>
+</footer>
+
+<script>
+  const messagesEl = document.getElementById('messages');
+  const emptyEl    = document.getElementById('empty');
+  const inputEl    = document.getElementById('input');
+  const sendBtn    = document.getElementById('send');
+  const dot        = document.getElementById('status-dot');
+  const peersBadge = document.getElementById('peers-badge');
+  const wsNameEl   = document.getElementById('ws-name');
+  const themeBtn   = document.getElementById('theme-btn');
+  const html       = document.documentElement;
+
+  let selfID = '';
+  let msgCount = 0;
+
+  // ── Theme ──────────────────────────────────────────────────────────────────
+  const savedTheme = localStorage.getItem('groove-theme') || 'dark';
+  setTheme(savedTheme);
+
+  themeBtn.addEventListener('click', () => {
+    setTheme(html.dataset.theme === 'dark' ? 'light' : 'dark');
+  });
+
+  function setTheme(t) {
+    html.dataset.theme = t;
+    themeBtn.textContent = t === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem('groove-theme', t);
+  }
+
+  // ── WebSocket ──────────────────────────────────────────────────────────────
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws    = new WebSocket(`${proto}://${location.host}/ws`);
+
+  ws.onopen = () => {
+    dot.classList.add('connected');
+    sendBtn.disabled = false;
+    addSystem('Connected to node');
+  };
+
+  ws.onclose = () => {
+    dot.classList.remove('connected');
+    sendBtn.disabled = true;
+    addSystem('Disconnected — refresh to reconnect');
+  };
+
+  ws.onerror = () => addSystem('WebSocket error');
+
+  ws.onmessage = (evt) => {
+    const env = JSON.parse(evt.data);
+
+    if (env.type === 'init') {
+      selfID = env.self_id;
+      wsNameEl.textContent = '#' + env.workspace;
+      if (env.history && env.history.length > 0) {
+        addDivider(`${env.history.length} previous message${env.history.length !== 1 ? 's' : ''}`);
+        env.history.forEach(m => addMessage(m));
+        addDivider('live');
+      }
+      return;
+    }
+
+    if (env.type === 'peers') {
+      const n = env.count;
+      peersBadge.textContent = `${n} peer${n !== 1 ? 's' : ''}`;
+      peersBadge.classList.toggle('has-peers', n > 0);
+      return;
+    }
+
+    if (env.type === 'message') {
+      addMessage(env.message);
+    }
+  };
+
+  // ── Render helpers ─────────────────────────────────────────────────────────
+  function addMessage(m) {
+    if (msgCount === 0) emptyEl.remove();
+    msgCount++;
+
+    const isSelf = m.from === selfID;
+    const row    = document.createElement('div');
+    row.className = `msg ${isSelf ? 'self' : 'peer'}`;
+
+    const ts   = new Date(m.ts);
+    const time = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    row.innerHTML =
+      `<span class="timestamp">${time}</span>` +
+      `<span class="sender">${isSelf ? 'me' : shortID(m.from)}</span>` +
+      `<span class="body">${escHtml(m.body)}</span>`;
+
+    messagesEl.appendChild(row);
+    scrollBottom();
+  }
+
+  function addSystem(text) {
+    const row = document.createElement('div');
+    row.className = 'msg system';
+    row.innerHTML =
+      `<span class="timestamp"></span>` +
+      `<span class="sender">—</span>` +
+      `<span class="body">${escHtml(text)}</span>`;
+    messagesEl.appendChild(row);
+    scrollBottom();
+  }
+
+  function addDivider(label) {
+    const div = document.createElement('div');
+    div.className = 'divider';
+    div.textContent = label;
+    messagesEl.appendChild(div);
+  }
+
+  function scrollBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function shortID(id) { return id.length > 12 ? id.slice(0, 12) : id; }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Send ───────────────────────────────────────────────────────────────────
+  function send() {
+    const text = inputEl.value.trim();
+    if (!text || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'send', body: text }));
+    inputEl.value = '';
+  }
+
+  sendBtn.addEventListener('click', send);
+  inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+</script>
+</body>
+</html>
