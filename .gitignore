@@ -1,0 +1,28 @@
+# Secrets & keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.env
+.env.*
+secrets/
+*_secret*
+*_private*
+identity.bin
+
+# Go
+groove-go/vendor/
+*.test
+*.out
+
+# IDE & tooling
+.claude/
+.entire/
+.opencode/
+*.code-workspace
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
