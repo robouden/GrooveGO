@@ -1,0 +1,18 @@
+sequenceDiagram
+    participant A as Peer A (online)
+    participant DB_A as Store A
+    participant DB_B as Store B
+    participant B as Peer B (was offline)
+
+    Note over B: Goes offline
+    A->>DB_A: Write CRDT ops (vector clock advances)
+    B->>DB_B: Write CRDT ops (vector clock advances)
+
+    Note over B: Comes back online
+    B->>A: Connect (mDNS / DHT)
+    A->>B: Exchange vector clocks
+    B->>A: Send missing ops (delta sync)
+    A->>B: Send missing ops (delta sync)
+    A->>A: Merge (conflict-free)
+    B->>B: Merge (conflict-free)
+    Note over A,B: Consistent state ✓

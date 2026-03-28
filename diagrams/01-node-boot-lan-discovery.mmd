@@ -1,0 +1,18 @@
+sequenceDiagram
+    participant A as Peer A (groove node)
+    participant M as mDNS (LAN multicast)
+    participant B as Peer B (groove node)
+
+    A->>A: Generate Ed25519 keypair
+    A->>A: Start libp2p host (TCP listen)
+    A->>M: Advertise service tag "groove-go.local"
+
+    B->>B: Generate Ed25519 keypair
+    B->>B: Start libp2p host (TCP listen)
+    B->>M: Advertise service tag "groove-go.local"
+
+    M-->>A: Notify: Peer B found (AddrInfo)
+    M-->>B: Notify: Peer A found (AddrInfo)
+
+    A->>B: libp2p Connect (Noise/TLS handshake)
+    B-->>A: Connected ✓
