@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "4814d65a2b3b",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "groove-go/cmd/groove/main.go",
+    "groove-go/go.mod"
+  ],
+  "sessions": [
+    {
+      "metadata": "/48/14d65a2b3b/0/metadata.json",
+      "transcript": "/48/14d65a2b3b/0/full.jsonl",
+      "content_hash": "/48/14d65a2b3b/0/content_hash.txt",
+      "prompt": "/48/14d65a2b3b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 100,
+    "cache_creation_tokens": 145775,
+    "cache_read_tokens": 2549235,
+    "output_tokens": 21601,
+    "api_call_count": 71
+  }
+}
