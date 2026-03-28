@@ -12,6 +12,7 @@ identity.bin
 
 # Go
 groove-go/vendor/
+groove-go/dist/
 *.test
 *.out
 
