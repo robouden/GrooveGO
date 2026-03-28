@@ -8,40 +8,46 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     [data-theme="dark"] {
-      --bg:       #0d0f16;
-      --surface:  #161923;
-      --surface2: #1e2130;
-      --border:   #252838;
-      --accent:   #7c6af7;
-      --accent-h: #9d8fff;
-      --text:     #e2e8f0;
-      --muted:    #5a6380;
-      --me:       #a78bfa;
-      --peer:     #38bdf8;
-      --system:   #64748b;
-      --success:  #4ade80;
-      --danger:   #f87171;
-      --file-bg:  #1e2a1e;
+      --bg:          #0d0f16;
+      --sidebar-bg:  #111420;
+      --surface:     #161923;
+      --surface2:    #1e2130;
+      --border:      #252838;
+      --accent:      #7c6af7;
+      --accent-h:    #9d8fff;
+      --text:        #e2e8f0;
+      --muted:       #5a6380;
+      --me:          #a78bfa;
+      --peer:        #38bdf8;
+      --system:      #64748b;
+      --success:     #4ade80;
+      --danger:      #f87171;
+      --file-bg:     #1e2a1e;
       --file-border: #2d4a2d;
-      --shadow:   0 2px 12px rgba(0,0,0,.4);
+      --ch-active:   #252838;
+      --ch-hover:    #1e2130;
+      --shadow:      0 2px 12px rgba(0,0,0,.4);
     }
     [data-theme="light"] {
-      --bg:       #f0f2f8;
-      --surface:  #ffffff;
-      --surface2: #f7f8fc;
-      --border:   #dde1ef;
-      --accent:   #6d5ce7;
-      --accent-h: #5848cc;
-      --text:     #1e2130;
-      --muted:    #7c85a2;
-      --me:       #6d5ce7;
-      --peer:     #0284c7;
-      --system:   #94a3b8;
-      --success:  #16a34a;
-      --danger:   #dc2626;
-      --file-bg:  #f0fdf0;
+      --bg:          #f0f2f8;
+      --sidebar-bg:  #e8eaf4;
+      --surface:     #ffffff;
+      --surface2:    #f7f8fc;
+      --border:      #dde1ef;
+      --accent:      #6d5ce7;
+      --accent-h:    #5848cc;
+      --text:        #1e2130;
+      --muted:       #7c85a2;
+      --me:          #6d5ce7;
+      --peer:        #0284c7;
+      --system:      #94a3b8;
+      --success:     #16a34a;
+      --danger:      #dc2626;
+      --file-bg:     #f0fdf0;
       --file-border: #bbf7d0;
-      --shadow:   0 2px 12px rgba(0,0,0,.1);
+      --ch-active:   #dde1ef;
+      --ch-hover:    #e8eaf4;
+      --shadow:      0 2px 12px rgba(0,0,0,.1);
     }
 
     body {
@@ -54,32 +60,112 @@
       transition: background .25s, color .25s;
     }
 
-    /* ── Header ── */
-    header {
+    /* ── App shell: sidebar + main ── */
+    .app {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 200px;
+      min-width: 200px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 14px 14px 8px;
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
       display: flex;
       align-items: center;
-      padding: 0 20px;
-      height: 56px;
+      justify-content: space-between;
+    }
+    .sidebar-add {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: 1.1rem; line-height: 1;
+      padding: 2px 4px; border-radius: 4px;
+      transition: color .15s, background .15s;
+    }
+    .sidebar-add:hover { color: var(--accent); background: var(--ch-hover); }
+
+    .channel-list {
+      flex: 1; overflow-y: auto; padding: 0 6px 8px;
+    }
+    .channel-list::-webkit-scrollbar { width: 4px; }
+    .channel-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .channel-item {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 10px; border-radius: 8px;
+      cursor: pointer; font-size: .88rem; color: var(--muted);
+      transition: background .12s, color .12s;
+      user-select: none;
+    }
+    .channel-item:hover { background: var(--ch-hover); color: var(--text); }
+    .channel-item.active {
+      background: var(--ch-active); color: var(--text); font-weight: 600;
+    }
+    .channel-item.active .ch-hash { color: var(--accent); }
+    .ch-hash { font-weight: 700; color: var(--muted); font-size: .9rem; }
+    .ch-unread {
+      margin-left: auto; background: var(--accent);
+      color: #fff; font-size: .65rem; font-weight: 700;
+      border-radius: 10px; padding: 1px 6px; min-width: 18px;
+      text-align: center; display: none;
+    }
+    .ch-unread.show { display: block; }
+
+    /* New channel form */
+    .new-channel-form {
+      display: none; padding: 8px 10px; gap: 6px;
+      border-top: 1px solid var(--border);
+    }
+    .new-channel-form.open { display: flex; }
+    .new-channel-input {
+      flex: 1; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: .85rem;
+      padding: 6px 10px; outline: none;
+      transition: border-color .2s;
+    }
+    .new-channel-input:focus { border-color: var(--accent); }
+    .new-channel-btn {
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 8px; padding: 6px 12px; font-size: .8rem;
+      font-weight: 600; cursor: pointer; transition: opacity .2s;
+    }
+    .new-channel-btn:hover { opacity: .85; }
+
+    /* ── Main area ── */
+    .main {
+      flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center;
+      padding: 0 20px; height: 56px;
       background: var(--surface);
       border-bottom: 1px solid var(--border);
-      box-shadow: var(--shadow);
-      flex-shrink: 0;
-      gap: 12px;
+      box-shadow: var(--shadow); flex-shrink: 0; gap: 12px;
     }
     .logo { display: flex; align-items: center; gap: 10px; }
     .logo-icon {
-      width: 30px; height: 30px;
-      background: var(--accent);
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 16px; flex-shrink: 0;
+      width: 30px; height: 30px; background: var(--accent);
+      border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; font-size: 16px; flex-shrink: 0;
     }
     .logo-text { font-size: 1rem; font-weight: 700; color: var(--text); }
     .logo-text span { color: var(--accent); }
     #ws-name {
-      font-size: .85rem; font-weight: 600; color: var(--muted);
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 20px; padding: 3px 12px;
+      font-size: .85rem; font-weight: 700; color: var(--accent);
     }
     .header-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
     #peers-badge {
@@ -104,8 +190,7 @@
 
     /* ── Drop overlay ── */
     #drop-overlay {
-      display: none;
-      position: fixed; inset: 0; z-index: 100;
+      display: none; position: fixed; inset: 0; z-index: 100;
       background: color-mix(in srgb, var(--accent) 15%, transparent);
       border: 3px dashed var(--accent);
       align-items: center; justify-content: center;
@@ -116,16 +201,15 @@
 
     /* ── Messages ── */
     #messages {
-      flex: 1; overflow-y: auto;
-      padding: 20px; display: flex; flex-direction: column; gap: 2px;
+      flex: 1; overflow-y: auto; padding: 20px;
+      display: flex; flex-direction: column; gap: 2px;
     }
     #messages::-webkit-scrollbar { width: 5px; }
     #messages::-webkit-scrollbar-track { background: transparent; }
     #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
     .msg {
-      display: grid;
-      grid-template-columns: 42px 90px 1fr;
+      display: grid; grid-template-columns: 42px 90px 1fr;
       align-items: baseline; gap: 0 8px;
       padding: 4px 8px; border-radius: 8px; transition: background .12s;
     }
@@ -141,15 +225,11 @@
     .file-bubble {
       display: inline-flex; align-items: center; gap: 10px;
       background: var(--file-bg); border: 1px solid var(--file-border);
-      border-radius: 10px; padding: 8px 14px; margin-top: 2px;
-      max-width: 320px;
+      border-radius: 10px; padding: 8px 14px; margin-top: 2px; max-width: 320px;
     }
     .file-icon { font-size: 1.4rem; flex-shrink: 0; }
     .file-info { display: flex; flex-direction: column; min-width: 0; }
-    .file-name {
-      font-size: .85rem; font-weight: 600; color: var(--text);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
+    .file-name { font-size: .85rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .file-meta { font-size: .72rem; color: var(--muted); }
     .file-dl {
       margin-left: auto; flex-shrink: 0;
@@ -160,7 +240,6 @@
     }
     .file-dl:hover { opacity: .85; }
 
-    /* ── Divider ── */
     .divider {
       display: flex; align-items: center; gap: 10px;
       color: var(--muted); font-size: .7rem;
@@ -168,7 +247,6 @@
     }
     .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
-    /* ── Empty state ── */
     #empty {
       flex: 1; display: flex; flex-direction: column;
       align-items: center; justify-content: center;
@@ -220,68 +298,96 @@
     #send:hover:not(:disabled) { background: var(--accent-h); }
     #send:active:not(:disabled) { transform: scale(.97); }
     #send:disabled { opacity: .35; cursor: default; }
+
+    /* ── Responsive: hide sidebar on small screens ── */
+    @media (max-width: 540px) {
+      .sidebar { display: none; }
+    }
   </style>
 </head>
 <body>
 
 <div id="drop-overlay">📎 Drop file to send</div>
 
-<header>
-  <div class="logo">
-    <div class="logo-icon">🎵</div>
-    <span class="logo-text">Groove<span>GO</span></span>
-  </div>
-  <div id="ws-name">#general</div>
-  <div class="header-right">
-    <div id="peers-badge">0 peers</div>
-    <div id="status-dot"></div>
-    <button id="theme-btn" title="Toggle light/dark">🌙</button>
-  </div>
-</header>
+<div class="app">
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      Channels
+      <button class="sidebar-add" id="add-ch-btn" title="New channel">＋</button>
+    </div>
+    <div class="channel-list" id="channel-list"></div>
+    <div class="new-channel-form" id="new-ch-form">
+      <input class="new-channel-input" id="new-ch-input" placeholder="channel-name" maxlength="32" />
+      <button class="new-channel-btn" id="new-ch-submit">Join</button>
+    </div>
+  </aside>
 
-<div id="upload-bar">
-  <span id="upload-label">Uploading…</span>
-  <progress id="upload-progress" max="100" value="0"></progress>
+  <!-- ── Main ── -->
+  <div class="main">
+    <header>
+      <div class="logo">
+        <div class="logo-icon">🎵</div>
+        <span class="logo-text">Groove<span>GO</span></span>
+      </div>
+      <span id="ws-name">#general</span>
+      <div class="header-right">
+        <div id="peers-badge">0 peers</div>
+        <div id="status-dot"></div>
+        <button id="theme-btn" title="Toggle light/dark">🌙</button>
+      </div>
+    </header>
+
+    <div id="upload-bar">
+      <span id="upload-label">Uploading…</span>
+      <progress id="upload-progress" max="100" value="0"></progress>
+    </div>
+
+    <div id="messages">
+      <div id="empty">
+        <div class="icon">💬</div>
+        <div>No messages yet — say hello or drop a file!</div>
+      </div>
+    </div>
+
+    <footer>
+      <button id="attach-btn" title="Send a file">📎</button>
+      <input id="file-input" type="file" />
+      <input id="input" type="text" placeholder="Type a message…" autocomplete="off" />
+      <button id="send" disabled>Send</button>
+    </footer>
+  </div>
 </div>
-
-<div id="messages">
-  <div id="empty">
-    <div class="icon">💬</div>
-    <div>No messages yet — say hello or drop a file!</div>
-  </div>
-</div>
-
-<footer>
-  <button id="attach-btn" title="Send a file">📎</button>
-  <input id="file-input" type="file" />
-  <input id="input" type="text" placeholder="Type a message…" autocomplete="off" />
-  <button id="send" disabled>Send</button>
-</footer>
 
 <script>
-  const messagesEl  = document.getElementById('messages');
-  const emptyEl     = document.getElementById('empty');
-  const inputEl     = document.getElementById('input');
-  const sendBtn     = document.getElementById('send');
-  const dot         = document.getElementById('status-dot');
-  const peersBadge  = document.getElementById('peers-badge');
-  const wsNameEl    = document.getElementById('ws-name');
-  const themeBtn    = document.getElementById('theme-btn');
-  const html        = document.documentElement;
-  const attachBtn   = document.getElementById('attach-btn');
-  const fileInput   = document.getElementById('file-input');
-  const uploadBar   = document.getElementById('upload-bar');
-  const uploadLabel = document.getElementById('upload-label');
-  const uploadProg  = document.getElementById('upload-progress');
+  const messagesEl   = document.getElementById('messages');
+  const inputEl      = document.getElementById('input');
+  const sendBtn      = document.getElementById('send');
+  const dot          = document.getElementById('status-dot');
+  const peersBadge   = document.getElementById('peers-badge');
+  const wsNameEl     = document.getElementById('ws-name');
+  const themeBtn     = document.getElementById('theme-btn');
+  const html         = document.documentElement;
+  const attachBtn    = document.getElementById('attach-btn');
+  const fileInput    = document.getElementById('file-input');
+  const uploadBar    = document.getElementById('upload-bar');
+  const uploadLabel  = document.getElementById('upload-label');
+  const uploadProg   = document.getElementById('upload-progress');
+  const channelList  = document.getElementById('channel-list');
+  const addChBtn     = document.getElementById('add-ch-btn');
+  const newChForm    = document.getElementById('new-ch-form');
+  const newChInput   = document.getElementById('new-ch-input');
+  const newChSubmit  = document.getElementById('new-ch-submit');
 
-  let selfID = '';
-  let msgCount = 0;
+  let selfID       = '';
+  let activeChannel = 'general';
+  // per-channel message counts (for empty state)
+  const channelMsgs = {};
 
   // ── Theme ──────────────────────────────────────────────────────────────────
   setTheme(localStorage.getItem('groove-theme') || 'dark');
   themeBtn.addEventListener('click', () =>
     setTheme(html.dataset.theme === 'dark' ? 'light' : 'dark'));
-
   function setTheme(t) {
     html.dataset.theme = t;
     themeBtn.textContent = t === 'dark' ? '☀️' : '🌙';
@@ -290,7 +396,8 @@
 
   // ── WebSocket ──────────────────────────────────────────────────────────────
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws    = new WebSocket(`${proto}://${location.host}/ws`);
+  const wsUrl = `${proto}://${location.host}/ws?workspace=${encodeURIComponent(activeChannel)}`;
+  const ws    = new WebSocket(wsUrl);
 
   ws.onopen = () => {
     dot.classList.add('connected');
@@ -306,29 +413,114 @@
 
   ws.onmessage = (evt) => {
     const env = JSON.parse(evt.data);
+
     if (env.type === 'init') {
       selfID = env.self_id;
+      activeChannel = env.workspace;
       wsNameEl.textContent = '#' + env.workspace;
+      clearMessages();
       if (env.history && env.history.length > 0) {
         addDivider(`${env.history.length} previous message${env.history.length !== 1 ? 's' : ''}`);
-        env.history.forEach(m => addMessage(m));
+        env.history.forEach(m => addMessage(m, env.workspace));
         addDivider('live');
       }
+      if (env.workspaces) updateSidebar(env.workspaces, env.workspace);
+      return;
+    }
+    if (env.type === 'workspaces') {
+      updateSidebar(env.workspaces, activeChannel);
       return;
     }
     if (env.type === 'peers') {
-      const n = env.count;
-      peersBadge.textContent = `${n} peer${n !== 1 ? 's' : ''}`;
-      peersBadge.classList.toggle('has-peers', n > 0);
+      if (env.workspace === activeChannel) {
+        const n = env.count;
+        peersBadge.textContent = `${n} peer${n !== 1 ? 's' : ''}`;
+        peersBadge.classList.toggle('has-peers', n > 0);
+      }
       return;
     }
-    if (env.type === 'message') addMessage(env.message);
+    if (env.type === 'message') {
+      if (env.workspace === activeChannel) {
+        addMessage(env.message, env.workspace);
+      } else {
+        // Show unread badge on other channel
+        bumpUnread(env.workspace);
+      }
+    }
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-  function addMessage(m) {
-    if (msgCount === 0) emptyEl.remove();
-    msgCount++;
+  // ── Sidebar ────────────────────────────────────────────────────────────────
+  function updateSidebar(channels, active) {
+    // preserve unread counts
+    const existing = {};
+    channelList.querySelectorAll('.channel-item').forEach(el => {
+      const badge = el.querySelector('.ch-unread');
+      existing[el.dataset.ch] = badge ? parseInt(badge.textContent) || 0 : 0;
+    });
+    channelList.innerHTML = '';
+    const sorted = [...new Set(channels)].sort();
+    sorted.forEach(name => {
+      const item = document.createElement('div');
+      item.className = 'channel-item' + (name === active ? ' active' : '');
+      item.dataset.ch = name;
+      const unread = existing[name] || 0;
+      item.innerHTML =
+        `<span class="ch-hash">#</span>${escHtml(name)}` +
+        `<span class="ch-unread${unread > 0 ? ' show' : ''}">${unread}</span>`;
+      item.addEventListener('click', () => joinChannel(name));
+      channelList.appendChild(item);
+    });
+  }
+
+  function bumpUnread(channelName) {
+    const item = channelList.querySelector(`[data-ch="${CSS.escape(channelName)}"]`);
+    if (!item) return;
+    const badge = item.querySelector('.ch-unread');
+    const cur = parseInt(badge.textContent) || 0;
+    badge.textContent = cur + 1;
+    badge.classList.add('show');
+  }
+
+  function joinChannel(name) {
+    if (name === activeChannel) return;
+    ws.send(JSON.stringify({ type: 'join', workspace: name }));
+    // Optimistically mark active in sidebar
+    channelList.querySelectorAll('.channel-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.ch === name);
+    });
+    // Clear unread for this channel
+    const item = channelList.querySelector(`[data-ch="${CSS.escape(name)}"]`);
+    if (item) {
+      const badge = item.querySelector('.ch-unread');
+      badge.textContent = '0';
+      badge.classList.remove('show');
+    }
+  }
+
+  // New channel form
+  addChBtn.addEventListener('click', () => {
+    newChForm.classList.toggle('open');
+    if (newChForm.classList.contains('open')) newChInput.focus();
+  });
+  newChSubmit.addEventListener('click', createChannel);
+  newChInput.addEventListener('keydown', e => { if (e.key === 'Enter') createChannel(); });
+  function createChannel() {
+    const name = newChInput.value.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+    if (!name) return;
+    newChInput.value = '';
+    newChForm.classList.remove('open');
+    joinChannel(name);
+  }
+
+  // ── Messages ───────────────────────────────────────────────────────────────
+  function clearMessages() {
+    messagesEl.innerHTML = '<div id="empty"><div class="icon">💬</div><div>No messages yet — say hello or drop a file!</div></div>';
+    channelMsgs[activeChannel] = 0;
+  }
+
+  function addMessage(m, forChannel) {
+    const emptyEl = document.getElementById('empty');
+    if (emptyEl) emptyEl.remove();
 
     const isSelf = m.from === selfID;
     const row    = document.createElement('div');
@@ -339,10 +531,9 @@
 
     if (m.msg_type === 'file' && m.file_id) {
       const dlUrl = `/files/${m.file_id}/${encodeURIComponent(m.file_name)}`;
-      const icon  = fileIcon(m.file_mime || '');
       bodyHtml =
         `<div class="file-bubble">` +
-          `<span class="file-icon">${icon}</span>` +
+          `<span class="file-icon">${fileIcon(m.file_mime || '')}</span>` +
           `<div class="file-info">` +
             `<span class="file-name" title="${escHtml(m.file_name)}">${escHtml(m.file_name)}</span>` +
             `<span class="file-meta">${humanSize(m.file_size)}</span>` +
@@ -381,26 +572,8 @@
   }
 
   function scrollBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
-  function shortID(id) { return id.length > 12 ? id.slice(0, 12) : id; }
-  function escHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
-                    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-  function humanSize(b) {
-    if (b >= 1048576) return (b/1048576).toFixed(1) + ' MB';
-    if (b >= 1024)    return (b/1024).toFixed(1) + ' KB';
-    return b + ' B';
-  }
-  function fileIcon(mime) {
-    if (mime.startsWith('image/'))  return '🖼️';
-    if (mime.startsWith('video/'))  return '🎬';
-    if (mime.startsWith('audio/'))  return '🎵';
-    if (mime.includes('pdf'))       return '📄';
-    if (mime.includes('zip') || mime.includes('compressed')) return '🗜️';
-    return '📎';
-  }
 
-  // ── Send chat ──────────────────────────────────────────────────────────────
+  // ── Send ───────────────────────────────────────────────────────────────────
   function send() {
     const text = inputEl.value.trim();
     if (!text || ws.readyState !== WebSocket.OPEN) return;
@@ -430,7 +603,7 @@
     uploadBar.classList.add('active');
 
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/upload');
+    xhr.open('POST', `/upload?workspace=${encodeURIComponent(activeChannel)}`);
     xhr.upload.onprogress = e => {
       if (e.lengthComputable) uploadProg.value = (e.loaded / e.total) * 100;
     };
@@ -438,13 +611,12 @@
       uploadBar.classList.remove('active');
       if (xhr.status === 200) {
         const res = JSON.parse(xhr.responseText);
-        // Echo the file message locally (server will push to peers separately)
         addMessage({
-          from: selfID, workspace: wsNameEl.textContent.slice(1),
+          from: selfID, workspace: activeChannel,
           body: `📎 ${res.file_name}`, ts: new Date().toISOString(),
           msg_type: 'file', file_id: res.file_id,
           file_name: res.file_name, file_mime: res.mime, file_size: res.file_size,
-        });
+        }, activeChannel);
       } else {
         addSystem(`❌ Upload failed: ${xhr.responseText}`);
       }
@@ -456,7 +628,7 @@
     xhr.send(form);
   }
 
-  // ── Drag & drop ───────────────────────────────────────────────────────────
+  // ── Drag & drop ────────────────────────────────────────────────────────────
   let dragCount = 0;
   document.addEventListener('dragenter', e => {
     if (e.dataTransfer.types.includes('Files')) { dragCount++; document.body.classList.add('dragging'); }
@@ -466,12 +638,30 @@
   });
   document.addEventListener('dragover', e => e.preventDefault());
   document.addEventListener('drop', e => {
-    e.preventDefault();
-    dragCount = 0;
-    document.body.classList.remove('dragging');
+    e.preventDefault(); dragCount = 0; document.body.classList.remove('dragging');
     const file = e.dataTransfer.files[0];
     if (file) uploadFile(file);
   });
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function shortID(id) { return id.length > 12 ? id.slice(0, 12) : id; }
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function humanSize(b) {
+    if (b >= 1048576) return (b/1048576).toFixed(1) + ' MB';
+    if (b >= 1024)    return (b/1024).toFixed(1) + ' KB';
+    return b + ' B';
+  }
+  function fileIcon(mime) {
+    if (mime.startsWith('image/'))  return '🖼️';
+    if (mime.startsWith('video/'))  return '🎬';
+    if (mime.startsWith('audio/'))  return '🎵';
+    if (mime.includes('pdf'))       return '📄';
+    if (mime.includes('zip') || mime.includes('compressed')) return '🗜️';
+    return '📎';
+  }
 </script>
 </body>
 </html>

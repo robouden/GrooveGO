@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/safecast/groove-go/internal/store"
 	"github.com/safecast/groove-go/internal/transport"
+	"github.com/safecast/groove-go/internal/workspace"
 )
 
 //go:embed static
@@ -24,54 +25,56 @@ var staticFiles embed.FS
 
 const maxUploadSize = 10 * 1024 * 1024 // 10 MB
 
-// WebSocket envelope types sent to the browser.
+// ── WebSocket envelope types ────────────────────────────────────────────────
+
 type initEnv struct {
-	Type      string          `json:"type"`
-	SelfID    string          `json:"self_id"`
-	Workspace string          `json:"workspace"`
-	History   []store.Message `json:"history"`
+	Type       string          `json:"type"` // "init"
+	SelfID     string          `json:"self_id"`
+	Workspace  string          `json:"workspace"`
+	History    []store.Message `json:"history"`
+	Workspaces []string        `json:"workspaces"`
 }
 type msgEnv struct {
-	Type    string        `json:"type"`
-	Message store.Message `json:"message"`
+	Type      string        `json:"type"` // "message"
+	Workspace string        `json:"workspace"`
+	Message   store.Message `json:"message"`
 }
 type peersEnv struct {
-	Type  string `json:"type"`
-	Count int    `json:"count"`
+	Type      string `json:"type"` // "peers"
+	Workspace string `json:"workspace"`
+	Count     int    `json:"count"`
 }
-type errEnv struct {
-	Type    string `json:"type"`
-	Message string `json:"message"`
+type workspacesEnv struct {
+	Type       string   `json:"type"` // "workspaces"
+	Workspaces []string `json:"workspaces"`
 }
 
-// clientSend is what the browser sends us over WebSocket.
-type clientSend struct {
-	Type string `json:"type"` // "send"
-	Body string `json:"body"`
+// clientMsg covers all commands the browser can send.
+type clientMsg struct {
+	Type      string `json:"type"`      // "send" | "join" | "list"
+	Body      string `json:"body"`      // for "send"
+	Workspace string `json:"workspace"` // for "join"
 }
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// Server serves the GrooveGO web UI and bridges WebSocket + file HTTP to pubsub.
+// Server serves the GrooveGO web UI.
 type Server struct {
-	selfID    string
-	workspace string
-	ws        *transport.Workspace
-	store     *store.Store
-	getPeers  func() int
+	selfID   string
+	mgr      *workspace.Manager
+	getPeers func(ws *transport.Workspace) int
 }
 
 // New creates a Server.
-func New(selfID, workspace string, ws *transport.Workspace, s *store.Store, getPeers func() int) *Server {
-	return &Server{selfID: selfID, workspace: workspace, ws: ws, store: s, getPeers: getPeers}
+func New(selfID string, mgr *workspace.Manager, getPeers func(ws *transport.Workspace) int) *Server {
+	return &Server{selfID: selfID, mgr: mgr, getPeers: getPeers}
 }
 
 // ListenAndServe starts the HTTP server on addr (e.g. ":8080").
 func (srv *Server) ListenAndServe(ctx context.Context, addr string) error {
 	mux := http.NewServeMux()
-
 	sub, err := fs.Sub(staticFiles, "static")
 	if err != nil {
 		return err
@@ -86,7 +89,6 @@ func (srv *Server) ListenAndServe(ctx context.Context, addr string) error {
 		<-ctx.Done()
 		_ = httpSrv.Close()
 	}()
-
 	fmt.Printf("[web] UI available at http://localhost%s\n", addr)
 	if err := httpSrv.ListenAndServe(); err != http.ErrServerClosed {
 		return err
@@ -94,10 +96,165 @@ func (srv *Server) ListenAndServe(ctx context.Context, addr string) error {
 	return nil
 }
 
-// handleUpload accepts a multipart file POST, publishes it over pubsub, saves locally.
+// handleWS manages a single browser connection with channel-switching support.
+func (srv *Server) handleWS(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	outerCtx, outerCancel := context.WithCancel(r.Context())
+	defer outerCancel()
+
+	// Default channel from query param or "general"
+	defaultCh := r.URL.Query().Get("workspace")
+	if defaultCh == "" {
+		defaultCh = "general"
+	}
+
+	// Shared channel: pubsub → this connection
+	incoming := make(chan transport.Message, 64)
+
+	// Read browser messages in a single goroutine for the lifetime of the conn
+	browserCh := make(chan clientMsg, 16)
+	go func() {
+		defer outerCancel()
+		for {
+			_, data, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var cm clientMsg
+			if json.Unmarshal(data, &cm) == nil {
+				browserCh <- cm
+			}
+		}
+	}()
+
+	// switchTo joins a channel, sends init frame, starts receive loop.
+	// Returns a cancel func for the previous receive goroutine.
+	var cancelRecv context.CancelFunc
+	switchTo := func(name string) {
+		if cancelRecv != nil {
+			cancelRecv()
+		}
+
+		ws, s, err := srv.mgr.Join(name)
+		if err != nil {
+			srv.writeJSON(conn, map[string]string{"type": "error", "message": err.Error()})
+			return
+		}
+
+		history, _ := s.History(name)
+		if history == nil {
+			history = []store.Message{}
+		}
+		srv.writeJSON(conn, initEnv{
+			Type:       "init",
+			SelfID:     srv.selfID,
+			Workspace:  name,
+			History:    history,
+			Workspaces: srv.mgr.List(),
+		})
+
+		recvCtx, cancel := context.WithCancel(outerCtx)
+		cancelRecv = cancel
+		go ws.ReadLoopInto(recvCtx, func(m transport.Message) {
+			if m.MsgType == transport.MsgTypeFile && m.FileData != "" {
+				if raw, err := base64.StdEncoding.DecodeString(m.FileData); err == nil {
+					_, _ = s.SaveFile(m.FileID, m.FileName, raw)
+				}
+			}
+			select {
+			case incoming <- m:
+			default:
+			}
+		})
+	}
+
+	switchTo(defaultCh)
+
+	peerTick := time.NewTicker(2 * time.Second)
+	defer peerTick.Stop()
+
+	for {
+		select {
+		case <-outerCtx.Done():
+			return
+
+		case cm := <-browserCh:
+			switch cm.Type {
+			case "send":
+				if cm.Body == "" {
+					continue
+				}
+				activeName := defaultCh // track active channel
+				if ws, s, ok := srv.mgr.Get(activeName); ok {
+					if err := ws.Publish(outerCtx, cm.Body); err == nil {
+						srv.writeJSON(conn, msgEnv{
+							Type:      "message",
+							Workspace: activeName,
+							Message: store.Message{
+								MsgType:   transport.MsgTypeChat,
+								From:      srv.selfID,
+								Workspace: activeName,
+								Body:      cm.Body,
+								Timestamp: time.Now().UTC(),
+							},
+						})
+						_ = s // used via ws
+					}
+				}
+			case "join":
+				if cm.Workspace == "" {
+					continue
+				}
+				defaultCh = cm.Workspace
+				switchTo(cm.Workspace)
+				srv.writeJSON(conn, workspacesEnv{
+					Type:       "workspaces",
+					Workspaces: srv.mgr.List(),
+				})
+			case "list":
+				srv.writeJSON(conn, workspacesEnv{
+					Type:       "workspaces",
+					Workspaces: srv.mgr.List(),
+				})
+			}
+
+		case m := <-incoming:
+			srv.writeJSON(conn, msgEnv{
+				Type:      "message",
+				Workspace: m.Workspace,
+				Message:   store.Message(m),
+			})
+
+		case <-peerTick.C:
+			if ws, _, ok := srv.mgr.Get(defaultCh); ok {
+				srv.writeJSON(conn, peersEnv{
+					Type:      "peers",
+					Workspace: defaultCh,
+					Count:     srv.getPeers(ws),
+				})
+			}
+		}
+	}
+}
+
+// handleUpload accepts a multipart file POST and publishes it to the active workspace.
 func (srv *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	wsName := r.URL.Query().Get("workspace")
+	if wsName == "" {
+		wsName = "general"
+	}
+	ws, s, ok := srv.mgr.Get(wsName)
+	if !ok {
+		http.Error(w, "not joined to workspace: "+wsName, http.StatusBadRequest)
 		return
 	}
 	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
@@ -112,11 +269,7 @@ func (srv *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	data, err := io.ReadAll(io.LimitReader(file, maxUploadSize+1))
-	if err != nil {
-		http.Error(w, "read error", http.StatusInternalServerError)
-		return
-	}
-	if len(data) > maxUploadSize {
+	if err != nil || len(data) > maxUploadSize {
 		http.Error(w, "file too large (max 10 MB)", http.StatusRequestEntityTooLarge)
 		return
 	}
@@ -130,34 +283,25 @@ func (srv *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		mimeType = "application/octet-stream"
 	}
 
-	// Save locally
-	if _, err := srv.store.SaveFile(fileID, header.Filename, data); err != nil {
+	if _, err := s.SaveFile(fileID, header.Filename, data); err != nil {
 		http.Error(w, "storage error", http.StatusInternalServerError)
 		return
 	}
-
-	// Publish to peers
-	if err := srv.ws.PublishFile(r.Context(), fileID, header.Filename, mimeType, data); err != nil {
+	if err := ws.PublishFile(r.Context(), fileID, header.Filename, mimeType, data); err != nil {
 		http.Error(w, "publish error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"ok":        true,
-		"file_id":   fileID,
-		"file_name": header.Filename,
-		"file_size": len(data),
-		"mime":      mimeType,
+		"ok": true, "file_id": fileID,
+		"file_name": header.Filename, "file_size": len(data), "mime": mimeType,
 	})
 }
 
-// handleFileDownload serves a previously received file.
-// URL pattern: /files/{fileID}/{fileName}
+// handleFileDownload serves a saved file. URL: /files/{fileID}/{fileName}
 func (srv *Server) handleFileDownload(w http.ResponseWriter, r *http.Request) {
-	// strip "/files/" prefix
 	rest := r.URL.Path[len("/files/"):]
-	// split into fileID / fileName
 	slash := len(rest)
 	for i, c := range rest {
 		if c == '/' {
@@ -169,102 +313,20 @@ func (srv *Server) handleFileDownload(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	fileID  := rest[:slash]
+	fileID   := rest[:slash]
 	fileName := rest[slash+1:]
-	path := srv.store.FilePath(fileID, fileName)
 
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(fileName)))
-	http.ServeFile(w, r, path)
-}
-
-// handleWS upgrades the connection and bridges pubsub ↔ browser.
-func (srv *Server) handleWS(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		return
-	}
-	defer conn.Close()
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	history, _ := srv.store.History(srv.workspace)
-	if history == nil {
-		history = []store.Message{}
-	}
-	srv.writeJSON(conn, initEnv{
-		Type:      "init",
-		SelfID:    srv.selfID,
-		Workspace: srv.workspace,
-		History:   history,
-	})
-
-	// Incoming pubsub messages → browser
-	incoming := make(chan transport.Message, 32)
-	go srv.ws.ReadLoopInto(ctx, func(m transport.Message) {
-		// Save file to disk when received
-		if m.MsgType == transport.MsgTypeFile && m.FileData != "" {
-			if raw, err := base64.StdEncoding.DecodeString(m.FileData); err == nil {
-				_, _ = srv.store.SaveFile(m.FileID, m.FileName, raw)
-			}
-		}
-		select {
-		case incoming <- m:
-		default:
-		}
-	})
-
-	peerTick := time.NewTicker(2 * time.Second)
-	defer peerTick.Stop()
-
-	browserMsgs := make(chan clientSend, 8)
-	browserDone := make(chan struct{})
-	go func() {
-		defer close(browserDone)
-		for {
-			_, data, err := conn.ReadMessage()
-			if err != nil {
-				cancel()
-				return
-			}
-			var cm clientSend
-			if err := json.Unmarshal(data, &cm); err == nil && cm.Type == "send" && cm.Body != "" {
-				browserMsgs <- cm
-			}
-		}
-	}()
-
-	for {
-		select {
-		case <-ctx.Done():
+	// Search all joined workspaces for the file
+	for _, name := range srv.mgr.List() {
+		if _, s, ok := srv.mgr.Get(name); ok {
+			path := s.FilePath(fileID, fileName)
+			w.Header().Set("Content-Disposition",
+				fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(fileName)))
+			http.ServeFile(w, r, path)
 			return
-		case <-browserDone:
-			return
-
-		case cm := <-browserMsgs:
-			if err := srv.ws.Publish(ctx, cm.Body); err == nil {
-				srv.writeJSON(conn, msgEnv{
-					Type: "message",
-					Message: store.Message{
-						MsgType:   transport.MsgTypeChat,
-						From:      srv.selfID,
-						Workspace: srv.workspace,
-						Body:      cm.Body,
-						Timestamp: time.Now().UTC(),
-					},
-				})
-			}
-
-		case m := <-incoming:
-			srv.writeJSON(conn, msgEnv{
-				Type:    "message",
-				Message: store.Message(m),
-			})
-
-		case <-peerTick.C:
-			srv.writeJSON(conn, peersEnv{Type: "peers", Count: srv.getPeers()})
 		}
 	}
+	http.NotFound(w, r)
 }
 
 func (srv *Server) writeJSON(conn *websocket.Conn, v any) {

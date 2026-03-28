@@ -10,27 +10,20 @@ import (
 	"syscall"
 
 	"github.com/safecast/groove-go/internal/node"
-	"github.com/safecast/groove-go/internal/store"
 	"github.com/safecast/groove-go/internal/transport"
 	"github.com/safecast/groove-go/internal/web"
+	"github.com/safecast/groove-go/internal/workspace"
 )
 
 func main() {
 	port      := flag.Int("port", 0, "libp2p TCP listen port (0 = random)")
 	httpAddr  := flag.String("http", ":8080", "Web UI listen address")
-	workspace := flag.String("workspace", "general", "Workspace name to join")
-	dataDir   := flag.String("data", defaultDataDir(), "Directory for local message store")
+	defaultCh := flag.String("workspace", "general", "Default channel to join on startup")
+	dataDir   := flag.String("data", defaultDataDir(), "Base directory for local stores")
 	flag.Parse()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	// Local persistence
-	s, err := store.Open(filepath.Join(*dataDir, *workspace))
-	if err != nil {
-		fatal(err)
-	}
-	defer s.Close()
 
 	// Boot libp2p node
 	n, err := node.New(ctx, *port)
@@ -52,16 +45,18 @@ func main() {
 		fatal(err)
 	}
 
-	// Join workspace topic
-	ws, err := transport.JoinWorkspace(ps, n.ID, *workspace, s)
-	if err != nil {
+	// Workspace manager — handles all channels
+	mgr := workspace.New(ps, n.ID, *dataDir)
+	defer mgr.CloseAll()
+
+	// Join default channel on startup
+	if _, _, err := mgr.Join(*defaultCh); err != nil {
 		fatal(err)
 	}
 
-	getPeers := func() int { return len(ws.ListPeers()) }
+	getPeers := func(ws *transport.Workspace) int { return len(ws.ListPeers()) }
 
-	// Start web server
-	webSrv := web.New(n.ID.String(), *workspace, ws, s, getPeers)
+	webSrv := web.New(n.ID.String(), mgr, getPeers)
 	go func() {
 		if err := webSrv.ListenAndServe(ctx, *httpAddr); err != nil {
 			fmt.Fprintf(os.Stderr, "[web] %s\n", err)
@@ -71,7 +66,6 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-
 	fmt.Println("[groove-web] shutting down")
 }
 
