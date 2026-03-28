@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/safecast/groove-go/internal/presence"
 	"github.com/safecast/groove-go/internal/store"
 	"github.com/safecast/groove-go/internal/transport"
 	"github.com/safecast/groove-go/internal/workspace"
@@ -28,32 +29,32 @@ const maxUploadSize = 10 * 1024 * 1024 // 10 MB
 // ── WebSocket envelope types ────────────────────────────────────────────────
 
 type initEnv struct {
-	Type       string          `json:"type"` // "init"
+	Type       string          `json:"type"`
 	SelfID     string          `json:"self_id"`
 	Workspace  string          `json:"workspace"`
 	History    []store.Message `json:"history"`
 	Workspaces []string        `json:"workspaces"`
 }
 type msgEnv struct {
-	Type      string        `json:"type"` // "message"
+	Type      string        `json:"type"`
 	Workspace string        `json:"workspace"`
 	Message   store.Message `json:"message"`
 }
 type peersEnv struct {
-	Type      string `json:"type"` // "peers"
-	Workspace string `json:"workspace"`
-	Count     int    `json:"count"`
+	Type      string   `json:"type"`
+	Workspace string   `json:"workspace"`
+	Count     int      `json:"count"`
+	Online    []string `json:"online"` // short peer IDs
 }
 type workspacesEnv struct {
-	Type       string   `json:"type"` // "workspaces"
+	Type       string   `json:"type"`
 	Workspaces []string `json:"workspaces"`
 }
 
-// clientMsg covers all commands the browser can send.
 type clientMsg struct {
-	Type      string `json:"type"`      // "send" | "join" | "list"
-	Body      string `json:"body"`      // for "send"
-	Workspace string `json:"workspace"` // for "join"
+	Type      string `json:"type"`
+	Body      string `json:"body"`
+	Workspace string `json:"workspace"`
 }
 
 var upgrader = websocket.Upgrader{
@@ -62,17 +63,16 @@ var upgrader = websocket.Upgrader{
 
 // Server serves the GrooveGO web UI.
 type Server struct {
-	selfID   string
-	mgr      *workspace.Manager
-	getPeers func(ws *transport.Workspace) int
+	selfID string
+	mgr    *workspace.Manager
 }
 
 // New creates a Server.
-func New(selfID string, mgr *workspace.Manager, getPeers func(ws *transport.Workspace) int) *Server {
-	return &Server{selfID: selfID, mgr: mgr, getPeers: getPeers}
+func New(selfID string, mgr *workspace.Manager) *Server {
+	return &Server{selfID: selfID, mgr: mgr}
 }
 
-// ListenAndServe starts the HTTP server on addr (e.g. ":8080").
+// ListenAndServe starts the HTTP server on addr.
 func (srv *Server) ListenAndServe(ctx context.Context, addr string) error {
 	mux := http.NewServeMux()
 	sub, err := fs.Sub(staticFiles, "static")
@@ -96,7 +96,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, addr string) error {
 	return nil
 }
 
-// handleWS manages a single browser connection with channel-switching support.
+// handleWS manages a single browser connection with channel-switching and presence.
 func (srv *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -107,16 +107,14 @@ func (srv *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	outerCtx, outerCancel := context.WithCancel(r.Context())
 	defer outerCancel()
 
-	// Default channel from query param or "general"
 	defaultCh := r.URL.Query().Get("workspace")
 	if defaultCh == "" {
 		defaultCh = "general"
 	}
 
-	// Shared channel: pubsub → this connection
 	incoming := make(chan transport.Message, 64)
 
-	// Read browser messages in a single goroutine for the lifetime of the conn
+	// Browser reader goroutine
 	browserCh := make(chan clientMsg, 16)
 	go func() {
 		defer outerCancel()
@@ -132,15 +130,15 @@ func (srv *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// switchTo joins a channel, sends init frame, starts receive loop.
-	// Returns a cancel func for the previous receive goroutine.
+	// switchTo joins a channel, sends init + presence, starts receive loop.
 	var cancelRecv context.CancelFunc
+
 	switchTo := func(name string) {
 		if cancelRecv != nil {
 			cancelRecv()
 		}
 
-		ws, s, err := srv.mgr.Join(name)
+		ws, s, tracker, err := srv.mgr.Join(outerCtx, name)
 		if err != nil {
 			srv.writeJSON(conn, map[string]string{"type": "error", "message": err.Error()})
 			return
@@ -157,12 +155,14 @@ func (srv *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			History:    history,
 			Workspaces: srv.mgr.List(),
 		})
+		// Send initial presence
+		srv.writeJSON(conn, srv.presenceEnv(name, tracker))
 
 		recvCtx, cancel := context.WithCancel(outerCtx)
 		cancelRecv = cancel
 		go ws.ReadLoopInto(recvCtx, func(m transport.Message) {
 			if m.MsgType == transport.MsgTypeFile && m.FileData != "" {
-				if raw, err := base64.StdEncoding.DecodeString(m.FileData); err == nil {
+				if raw, decErr := base64.StdEncoding.DecodeString(m.FileData); decErr == nil {
 					_, _ = s.SaveFile(m.FileID, m.FileName, raw)
 				}
 			}
@@ -175,8 +175,8 @@ func (srv *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	switchTo(defaultCh)
 
-	peerTick := time.NewTicker(2 * time.Second)
-	defer peerTick.Stop()
+	tick := time.NewTicker(5 * time.Second)
+	defer tick.Stop()
 
 	for {
 		select {
@@ -189,21 +189,20 @@ func (srv *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 				if cm.Body == "" {
 					continue
 				}
-				activeName := defaultCh // track active channel
-				if ws, s, ok := srv.mgr.Get(activeName); ok {
+				if ws, s, _, ok := srv.mgr.Get(defaultCh); ok {
 					if err := ws.Publish(outerCtx, cm.Body); err == nil {
 						srv.writeJSON(conn, msgEnv{
 							Type:      "message",
-							Workspace: activeName,
+							Workspace: defaultCh,
 							Message: store.Message{
 								MsgType:   transport.MsgTypeChat,
 								From:      srv.selfID,
-								Workspace: activeName,
+								Workspace: defaultCh,
 								Body:      cm.Body,
 								Timestamp: time.Now().UTC(),
 							},
 						})
-						_ = s // used via ws
+						_ = s
 					}
 				}
 			case "join":
@@ -230,19 +229,34 @@ func (srv *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 				Message:   store.Message(m),
 			})
 
-		case <-peerTick.C:
-			if ws, _, ok := srv.mgr.Get(defaultCh); ok {
-				srv.writeJSON(conn, peersEnv{
-					Type:      "peers",
-					Workspace: defaultCh,
-					Count:     srv.getPeers(ws),
-				})
+		case <-tick.C:
+			// Push peer count + online list
+			if _, _, tracker, ok := srv.mgr.Get(defaultCh); ok {
+				srv.writeJSON(conn, srv.presenceEnv(defaultCh, tracker))
 			}
 		}
 	}
 }
 
-// handleUpload accepts a multipart file POST and publishes it to the active workspace.
+func (srv *Server) presenceEnv(wsName string, t *presence.Tracker) peersEnv {
+	online := t.Online()
+	ids := make([]string, len(online))
+	for i, p := range online {
+		s := p.ID.String()
+		if len(s) > 12 {
+			s = s[:12]
+		}
+		ids[i] = s
+	}
+	return peersEnv{
+		Type:      "peers",
+		Workspace: wsName,
+		Count:     len(online),
+		Online:    ids,
+	}
+}
+
+// handleUpload receives a file and publishes it.
 func (srv *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -252,7 +266,7 @@ func (srv *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if wsName == "" {
 		wsName = "general"
 	}
-	ws, s, ok := srv.mgr.Get(wsName)
+	ws, s, _, ok := srv.mgr.Get(wsName)
 	if !ok {
 		http.Error(w, "not joined to workspace: "+wsName, http.StatusBadRequest)
 		return
@@ -315,10 +329,8 @@ func (srv *Server) handleFileDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	fileID   := rest[:slash]
 	fileName := rest[slash+1:]
-
-	// Search all joined workspaces for the file
 	for _, name := range srv.mgr.List() {
-		if _, s, ok := srv.mgr.Get(name); ok {
+		if _, s, _, ok := srv.mgr.Get(name); ok {
 			path := s.FilePath(fileID, fileName)
 			w.Header().Set("Content-Disposition",
 				fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(fileName)))

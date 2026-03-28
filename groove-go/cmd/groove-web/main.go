@@ -25,38 +25,31 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Boot libp2p node
 	n, err := node.New(ctx, *port)
 	if err != nil {
 		fatal(err)
 	}
 	defer n.Close()
 
-	// mDNS LAN discovery
 	mdnsSvc, err := node.StartMDNS(ctx, n.Host)
 	if err != nil {
 		fatal(err)
 	}
 	defer mdnsSvc.Close()
 
-	// GossipSub router
 	ps, err := transport.NewGossipSub(ctx, n.Host)
 	if err != nil {
 		fatal(err)
 	}
 
-	// Workspace manager — handles all channels
 	mgr := workspace.New(ps, n.ID, *dataDir)
 	defer mgr.CloseAll()
 
-	// Join default channel on startup
-	if _, _, err := mgr.Join(*defaultCh); err != nil {
+	if _, _, _, err := mgr.Join(ctx, *defaultCh); err != nil {
 		fatal(err)
 	}
 
-	getPeers := func(ws *transport.Workspace) int { return len(ws.ListPeers()) }
-
-	webSrv := web.New(n.ID.String(), mgr, getPeers)
+	webSrv := web.New(n.ID.String(), mgr)
 	go func() {
 		if err := webSrv.ListenAndServe(ctx, *httpAddr); err != nil {
 			fmt.Fprintf(os.Stderr, "[web] %s\n", err)

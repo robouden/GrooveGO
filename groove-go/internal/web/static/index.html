@@ -129,6 +129,28 @@
       border-top: 1px solid var(--border);
     }
     .new-channel-form.open { display: flex; }
+
+    /* Online users panel */
+    .online-section {
+      border-top: 1px solid var(--border);
+      padding: 10px 6px 8px;
+      flex-shrink: 0;
+    }
+    .online-header {
+      font-size: .7rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .08em;
+      color: var(--muted); padding: 0 8px 6px;
+    }
+    .online-user {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 10px; font-size: .82rem; color: var(--muted);
+      border-radius: 8px;
+    }
+    .online-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--success); flex-shrink: 0;
+    }
+    .online-empty { font-size: .78rem; color: var(--muted); padding: 4px 10px; }
     .new-channel-input {
       flex: 1; background: var(--surface2); border: 1px solid var(--border);
       border-radius: 8px; color: var(--text); font-size: .85rem;
@@ -317,6 +339,12 @@
       <button class="sidebar-add" id="add-ch-btn" title="New channel">＋</button>
     </div>
     <div class="channel-list" id="channel-list"></div>
+    <!-- Online users -->
+    <div class="online-section" id="online-section">
+      <div class="online-header">Online</div>
+      <div id="online-list"><div class="online-empty">No peers yet</div></div>
+    </div>
+
     <div class="new-channel-form" id="new-ch-form">
       <input class="new-channel-input" id="new-ch-input" placeholder="channel-name" maxlength="32" />
       <button class="new-channel-btn" id="new-ch-submit">Join</button>
@@ -436,6 +464,7 @@
         const n = env.count;
         peersBadge.textContent = `${n} peer${n !== 1 ? 's' : ''}`;
         peersBadge.classList.toggle('has-peers', n > 0);
+        updateOnline(env.online || []);
       }
       return;
     }
@@ -644,6 +673,18 @@
   });
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+  // ── Online users ───────────────────────────────────────────────────────────
+  const onlineList = document.getElementById('online-list');
+  function updateOnline(peers) {
+    if (peers.length === 0) {
+      onlineList.innerHTML = '<div class="online-empty">No peers yet</div>';
+      return;
+    }
+    onlineList.innerHTML = peers.map(id =>
+      `<div class="online-user"><span class="online-dot"></span>${escHtml(id)}</div>`
+    ).join('');
+  }
+
   function shortID(id) { return id.length > 12 ? id.slice(0, 12) : id; }
   function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
