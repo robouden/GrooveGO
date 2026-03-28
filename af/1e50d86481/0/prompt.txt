@@ -1,0 +1,75 @@
+<ide_opened_file>The user opened the file /home/rob/Documents/Safecast/GrooveGO/ARCHITECTURE.md in the IDE. This may or may not be related to the current task.</ide_opened_file>
+Please continue
+
+---
+
+can you add a readme.md file?
+
+---
+
+<ide_opened_file>The user opened the file /home/rob/Documents/Safecast/GrooveGO/GrooveGO V2.md in the IDE. This may or may not be related to the current task.</ide_opened_file>
+Sorry I interruped you. Coninue
+
+---
+
+commit and push..
+
+---
+
+remeber to keep any secerts/keys et in gitignore..
+
+---
+
+NP.. my bad..
+
+---
+
+next step..
+
+---
+
+ready
+
+---
+
+Give it a try..
+
+---
+
+can we make someting like that in a browser?
+
+---
+
+How to display two nodes?
+
+---
+
+same url?
+
+---
+
+rob@rob-GS66-Stealth-10UG:~/Documents/Safecast/GrooveGO/groove-go$ cd groove-go
+go run ./cmd/groove-web --port 9001 --http :8081 --workspace general
+bash: cd: groove-go: No such file or directory
+fatal: store open: Cannot acquire directory lock on "/home/rob/.groove/general".  Another process is using this Badger database. err: resource temporarily unavailable
+exit status 1
+
+---
+
+can we send files too?
+
+---
+
+yes..
+
+---
+
+yes
+
+---
+
+maybe first a commit and push?
+
+---
+
+go
