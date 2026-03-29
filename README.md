@@ -256,6 +256,61 @@ sequenceDiagram
 
 Full standalone diagram files are in [diagrams/](diagrams/).
 
+## Integrations
+
+### Codeberg Webhook
+
+GrooveGO can receive Codeberg events (push, issues, pull requests, comments, releases) and post them as messages into a workspace channel — similar to the GitHub + Slack integration.
+
+#### 1. Start groove-web with the Codeberg flags
+
+```bash
+./groove-web \
+  --codeberg-channel codeberg \
+  --codeberg-secret  mysecret   # must match what you set in Codeberg
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--codeberg-channel` | `codeberg` | Channel to post events into |
+| `--codeberg-secret` | _(empty)_ | HMAC secret for signature verification (recommended) |
+
+The webhook endpoint is:
+```
+POST http://your-server:8080/webhook/codeberg
+```
+
+#### 2. Add the webhook in Codeberg
+
+1. Go to your repo on [Codeberg](https://codeberg.org) → **Settings** → **Webhooks** → **Add Webhook** → **Gitea**
+2. Fill in:
+   - **Target URL:** `http://your-server:8080/webhook/codeberg`
+   - **Secret:** same value as `--codeberg-secret`
+   - **Trigger:** check _Push_, _Issues_, _Pull Request_, _Issue Comment_, _Release_
+3. Click **Add Webhook** and use **Test Delivery** to verify
+
+#### 3. What it looks like in the channel
+
+```
+[push] rob pushed 2 commits to safecast/bGeigieZen/main: Fix GPS drift on rev C
+[issue] rob opened #42 in safecast/bGeigieZen: GPS drift on v3 hardware — https://codeberg.org/...
+[PR] rob opened #7 in safecast/bGeigieZen: Fix NAT traversal timeout — https://codeberg.org/...
+[comment] rob commented on #42 in safecast/bGeigieZen: Confirmed on rev C boards — https://codeberg.org/...
+[release] rob released v1.2.0 in safecast/bGeigieZen — https://codeberg.org/...
+```
+
+#### Project structure
+
+```
+internal/apps/
+└── codeberg/
+    └── codeberg.go   # payload types, HMAC verification, message formatter
+```
+
+New integrations (GitHub, Slack, etc.) follow the same pattern — one file under `internal/apps/<name>/`.
+
+---
+
 ## Key Libraries
 
 | Purpose | Library |
