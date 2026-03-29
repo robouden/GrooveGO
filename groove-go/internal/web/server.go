@@ -63,8 +63,19 @@ var upgrader = websocket.Upgrader{
 
 // Server serves the GrooveGO web UI.
 type Server struct {
-	selfID string
-	mgr    *workspace.Manager
+	selfID   string
+	mgr      *workspace.Manager
+	webhooks []webhook
+}
+
+type webhook struct {
+	pattern string
+	handler http.Handler
+}
+
+// AddWebhook registers an HTTP handler at the given URL pattern.
+func (srv *Server) AddWebhook(pattern string, h http.Handler) {
+	srv.webhooks = append(srv.webhooks, webhook{pattern, h})
 }
 
 // New creates a Server.
@@ -83,6 +94,9 @@ func (srv *Server) ListenAndServe(ctx context.Context, addr string) error {
 	mux.HandleFunc("/ws", srv.handleWS)
 	mux.HandleFunc("/upload", srv.handleUpload)
 	mux.HandleFunc("/files/", srv.handleFileDownload)
+	for _, wh := range srv.webhooks {
+		mux.Handle(wh.pattern, wh.handler)
+	}
 
 	httpSrv := &http.Server{Addr: addr, Handler: mux}
 	go func() {

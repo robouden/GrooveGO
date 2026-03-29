@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/safecast/groove-go/internal/apps/codeberg"
 	"github.com/safecast/groove-go/internal/node"
 	"github.com/safecast/groove-go/internal/transport"
 	"github.com/safecast/groove-go/internal/web"
@@ -23,11 +24,13 @@ func (m *multiFlag) String() string  { return strings.Join(*m, ", ") }
 func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
 func main() {
-	port      := flag.Int("port", 0, "libp2p TCP listen port (0 = random)")
-	httpAddr  := flag.String("http", ":8080", "Web UI listen address")
-	defaultCh := flag.String("workspace", "general", "Default channel to join on startup")
-	dataDir   := flag.String("data", defaultDataDir(), "Base directory for local stores")
-	enableDHT := flag.Bool("dht", true, "Enable Kademlia DHT for WAN peer discovery")
+	port              := flag.Int("port", 0, "libp2p TCP listen port (0 = random)")
+	httpAddr          := flag.String("http", ":8080", "Web UI listen address")
+	defaultCh         := flag.String("workspace", "general", "Default channel to join on startup")
+	dataDir           := flag.String("data", defaultDataDir(), "Base directory for local stores")
+	enableDHT         := flag.Bool("dht", true, "Enable Kademlia DHT for WAN peer discovery")
+	codebergSecret    := flag.String("codeberg-secret", "", "Codeberg webhook HMAC secret (optional)")
+	codebergChannel   := flag.String("codeberg-channel", "codeberg", "Channel to post Codeberg events into")
 
 	var relayAddrs  multiFlag
 	var bootstrapAddrs multiFlag
@@ -79,6 +82,13 @@ func main() {
 	}
 
 	webSrv := web.New(n.ID.String(), mgr)
+
+	// Codeberg webhook — join target channel then register handler
+	if ws, _, _, err := mgr.Join(ctx, *codebergChannel); err == nil {
+		webSrv.AddWebhook("/webhook/codeberg", codeberg.New(*codebergSecret, ws))
+		fmt.Printf("[codeberg] webhook active at /webhook/codeberg → #%s\n", *codebergChannel)
+	}
+
 	go func() {
 		if err := webSrv.ListenAndServe(ctx, *httpAddr); err != nil {
 			fmt.Fprintf(os.Stderr, "[web] %s\n", err)
