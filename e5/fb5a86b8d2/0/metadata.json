@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "e5fb5a86b8d2",
+  "session_id": "06bcbec1-38f2-4a1f-b573-52dae5adb777",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-29T23:26:19.151401517Z",
+  "branch": "main",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "groove-go/cmd/groove-web/main.go",
+    "groove-go/internal/web/server.go"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "794489b778ed",
+  "token_usage": {
+    "input_tokens": 59,
+    "cache_creation_tokens": 32317,
+    "cache_read_tokens": 1173681,
+    "output_tokens": 9259,
+    "api_call_count": 33
+  },
+  "session_metrics": {
+    "turn_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-29T23:26:19.072396822Z",
+    "agent_lines": 0,
+    "human_added": 232,
+    "human_modified": 7,
+    "human_removed": 0,
+    "total_committed": 232,
+    "agent_percentage": 0
+  }
+}

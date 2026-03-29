@@ -1,0 +1,33 @@
+OOps.. I lost you setup
+
+---
+
+I wanted to add intergration with Codeberg events.You were making a plan, when I by accident remove a folder.
+
+---
+
+Yes, something like that. Similar as Slack and Github..
+
+---
+
+maybe best to make an App folder and Codeberg as a subfolder?
+
+---
+
+try to make it as simple as possibe..:)
+
+---
+
+Just wonwering if we will comit to GiHub or to Codeberg ot to both?
+
+---
+
+3
+
+---
+
+https://codeberg.org/robouden/GrooveGO
+
+---
+
+both
