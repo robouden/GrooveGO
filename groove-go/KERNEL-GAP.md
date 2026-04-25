@@ -152,9 +152,9 @@ The numbering matches `GROOVE-BACKEND-PLAN.md` §5.
 
 ## Decision: ready for `KERNEL-SPEC.md`?
 
-**Not yet.** Two items must be settled in spec before code:
+**Yes — both gating decisions are now made (recorded in `GROOVE-BACKEND-PLAN.md` §2.0.6 and §2.0.7):**
 
-- **CRDT choice for membership log.** Plan recommends hand-rolled (small, deterministic, auditable). Confirm that decision in `KERNEL-SPEC.md` before defining op formats.
-- **Object op envelope encoding.** Plan says protobuf via `pkg/protocol/`. Current codebase has zero protobuf footprint and uses JSON throughout. Confirm protobuf vs. canonical JSON before fixing wire layouts; protobuf is recommended for determinism but adds tooling.
+1. **Membership log CRDT: hand-rolled** signed op-based CRDT over a causal DAG. Vector-clock ordering, Ed25519 sigs, deterministic tie-breaks by content hash, validity as a pure function of `(log_prefix, op)`. Object content still uses Automerge.
+2. **Wire format: canonical JSON** (RFC 8785 / JCS). Stdlib `encoding/json` is **not sufficient** for hash-and-sign — every signing/verification path goes through a JCS canonicalizer. Files >~64 KB are not inlined; they live as content-addressed blobs.
 
-Once both are decided, `KERNEL-SPEC.md` can freeze the record formats and the seven scenario walk-throughs can begin.
+Next step: draft `KERNEL-SPEC.md` with the §2 decisions frozen and the concrete record layouts (identity, membership ops, op envelope, encryption framing). Then walk through the seven Phase-0 scenarios on paper.
