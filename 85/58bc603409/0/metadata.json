@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.5.2",
+  "checkpoint_id": "8558bc603409",
+  "session_id": "72eb91da-74f0-412f-a40b-29c6b169c235",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-25T13:15:38.105172694Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "groove-go/KERNEL-SPEC.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "ec1bdc8b49c7",
+  "checkpoint_transcript_start": 500,
+  "transcript_lines_at_start": 500,
+  "token_usage": {
+    "input_tokens": 8,
+    "cache_creation_tokens": 14241,
+    "cache_read_tokens": 580266,
+    "output_tokens": 13589,
+    "api_call_count": 3
+  },
+  "session_metrics": {
+    "turn_count": 16
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-25T13:15:37.713939821Z",
+    "agent_lines": 489,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 489,
+    "agent_percentage": 100
+  }
+}
