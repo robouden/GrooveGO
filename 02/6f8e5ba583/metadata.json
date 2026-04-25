@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.2",
+  "checkpoint_id": "026f8e5ba583",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "groove-go/KERNEL-GAP.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/02/6f8e5ba583/0/metadata.json",
+      "transcript": "/02/6f8e5ba583/0/full.jsonl",
+      "content_hash": "/02/6f8e5ba583/0/content_hash.txt",
+      "prompt": "/02/6f8e5ba583/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 197,
+    "cache_creation_tokens": 516241,
+    "cache_read_tokens": 8107023,
+    "output_tokens": 79614,
+    "api_call_count": 83
+  }
+}
